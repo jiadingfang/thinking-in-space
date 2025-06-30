@@ -5,6 +5,7 @@ from loguru import logger as eval_logger
 from functools import partial
 import numpy as np
 import pandas as pd
+import json
 
 import datasets
 
@@ -31,7 +32,6 @@ METRICS_FOR_NA = {
     "MRA:.5:.95:.05": "partial(mean_relative_accuracy, start=.5, end=.95, interval=.05)",
 }
 
-
 hf_home = os.getenv("HF_HOME", "~/.cache/huggingface/")
 base_cache_dir = os.path.expanduser(hf_home)
 with open(Path(__file__).parent / "vsibench.yaml", "r") as f:
@@ -42,7 +42,6 @@ with open(Path(__file__).parent / "vsibench.yaml", "r") as f:
             safe_data.append(line)
 cache_name = yaml.safe_load("".join(safe_data))["dataset_kwargs"]["cache_dir"]
 
-
 def vsibench_doc_to_visual(doc):
     cache_dir = os.path.join(base_cache_dir, cache_name)
     video_path = doc["dataset"] + "/" + doc["scene_name"] + ".mp4"
@@ -52,7 +51,6 @@ def vsibench_doc_to_visual(doc):
     else:
         raise FileExistsError(f"video path:{video_path} does not exist.")
     return [video_path]
-
 
 def vsibench_doc_to_text(doc, lmms_eval_specific_kwargs=None):
     question = doc["question"]
@@ -69,8 +67,17 @@ def vsibench_doc_to_text(doc, lmms_eval_specific_kwargs=None):
     else:
         raise ValueError(f"Unknown question type: {doc['question_type']}")
 
-
 def process_docs(dataset: datasets.Dataset) -> datasets.Dataset:
+    """Process docs with balanced sampling if balanced indices are available."""
+    # Check if balanced indices file exists
+    if os.path.exists("balanced_indices.json"):
+        eval_logger.info("Using balanced sample indices for evaluation")
+        with open("balanced_indices.json", "r") as f:
+            balanced_indices = json.load(f)
+        # Select only the balanced indices
+        return dataset.select(balanced_indices)
+    
+    # Fall back to original behavior
     if os.getenv('LMMS_EVAL_SHUFFLE_DOCS', None):
         eval_logger.info(f"Environment variable LMMS_EVAL_SHUFFLE_DOCS detected, dataset will be shuffled.")
         return dataset.shuffle(seed=42)
@@ -104,7 +111,6 @@ def to_float(pred):
     return pred
 
 def vsibench_process_results(doc, results):
-    
     doc['prediction'] = results[0]
     if doc['question_type'] in MCA_QUESTION_TYPES:
         for key, value in METRICS_FOR_MCA.items():
@@ -137,7 +143,6 @@ def vsibench_aggregate_results(results):
                     output[f"{question_type}_{metric}"] = per_question_type[metric].mean()
                 else:
                     output[f"{question_type}_{metric}"] = per_question_type[metric].mean()
-
         else:
             raise ValueError(f"Unknown question type: {question_type}")
     
