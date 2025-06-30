@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 import yaml
@@ -143,11 +142,13 @@ def vsibench_aggregate_results(results):
             raise ValueError(f"Unknown question type: {question_type}")
     
     output['object_rel_direction_accuracy'] = sum([
-        output.pop('object_rel_direction_easy_accuracy'),
-        output.pop('object_rel_direction_medium_accuracy'),
-        output.pop('object_rel_direction_hard_accuracy'),
-    ]) / 3.
+        output.pop('object_rel_direction_easy_accuracy', 0.0),
+        output.pop('object_rel_direction_medium_accuracy', 0.0),
+        output.pop('object_rel_direction_hard_accuracy', 0.0),
+    ]) / 3.0
     
-    output['overall'] = sum([_ for _ in output.values()]) / len(output)
+    # Only average over metrics that are present and are floats/ints
+    metric_values = [v for v in output.values() if isinstance(v, (float, int))]
+    output['overall'] = sum(metric_values) / len(metric_values) if metric_values else 0.0
     eval_logger.info(f"Evaluation results: {output}")
     return output['overall'] * 100.
